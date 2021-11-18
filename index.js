@@ -5,19 +5,23 @@ const github = require('@actions/github');
 async function run() {
   try {
     const paths = core.getInput('paths');
-    const auditLocations = paths.split(/\r?\n/).filter(path => path.trim());
+    const auditLocations = paths.split(/\r?\n/).filter((path) => path.trim());
     core.info(`Running audit for the paths ${auditLocations}`);
     const exitCodes = await Promise.all(
       auditLocations.map((location) => {
         const options = {
           silent: true,
-          ignoreReturnCode: true,
-          cwd: location
+          ignoreReturnCode: false,
+          cwd: location,
         };
-        return exec.exec('yarn', ['audit'], options);
-      })
+        const yarnAudit = exec.exec('yarn', ['audit'], options);
+
+        console.log('YARN AUDIT', yarnAudit);
+        return yarnAudit;
+      }),
     );
-    const highSeverityExitCodes = exitCodes.filter(exitCode => exitCode > 7);
+    const highSeverityExitCodes = exitCodes.filter((exitCode) => exitCode > 7);
+    console.log(highSeverityExitCodes);
     if (highSeverityExitCodes.length) {
       const assignee = core.getInput('assignee');
       const label = core.getInput('label');
@@ -29,7 +33,7 @@ async function run() {
       const issues = await octokit.issues.listForRepo({
         ...context.repo,
         labels: label,
-        state: 'open'
+        state: 'open',
       });
 
       if (!(issues.data && issues.data.length)) {
@@ -38,16 +42,18 @@ async function run() {
           title: issueTitle,
           body: issueDescription,
           labels: [label || ''],
-          assignee: assignee || ''
+          assignee: assignee || '',
         });
-        core.info('High severity issues are found and a Github issue is created.');
+        core.info(
+          'High severity issues are found and a Github issue is created.',
+        );
       } else {
         core.info('An open issue already exists. Not creating a new issue');
       }
     } else {
       core.info('No high severity issues found in your packages.');
     }
-  } catch(error) {
+  } catch (error) {
     core.setFailed(error.message);
   }
 }
